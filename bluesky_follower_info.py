@@ -88,10 +88,7 @@ def print_sorted_list_by_follower_count(
     for handle, followerCount, followingCount in handle_followerCount_followingCount[
         :300
     ]:
-        if ignore_dubiousness:
-            is_dubious = False
-        else:
-            is_dubious = (followerCount / followingCount) < 2
+        is_dubious = ignore_dubiousness or (followerCount / followingCount) < 2
         if not is_dubious:
             print(
                 f"https://bsky.app/profile/{handle} : {followerCount}, {followingCount}"
