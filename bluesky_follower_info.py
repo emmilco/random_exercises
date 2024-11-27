@@ -1,7 +1,29 @@
-import requests
-from concurrent.futures import ThreadPoolExecutor
+# -----------------------------------------------------------------------------
+# READ ME
+#
+# This is a pretty primitive set of functions, the purpose of which is to
+# generate a CSV file containing all of your followers/following and their
+# profile data. It's assumed that after generating this you will use a CSV
+# viewer like Excel/Numbers/Google Sheets to sort, filter, and analyze the
+# data. Bon Voyage and enjoy.
+#
+# INSTRUCTIONS FOR USE:
+#
+# First, replace the value of `actor` below with your handle.
+# Then, from the command line, run the file using python3, e.g.:
+# `python bluesky_follower_info.py`
+#
+# The data collection will take several minutes, depending on how many
+# followers/following you have, so let it run. When it's done it will
+# spit out a file called `all_related.csv` with your people in it.
+# -----------------------------------------------------------------------------
 
-actor = "1t2ls.bsky.social"
+
+import requests
+import csv
+
+
+actor = "PUT_YOUR_HANDLE_HERE.bsky.social"
 
 
 def get_all_followers(handle):
@@ -61,54 +83,61 @@ def get_non_mutuals(handle):
     return not_following, not_following_me
 
 
-def print_sorted_list_by_follower_count(
-    followers, *, invert=False, ignore_dubiousness=False
-):
-    handle_followerCount_followingCount = list()
+def fetch_profile(handle):
+    profile = requests.get(
+        f"https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={handle}"
+    ).json()
 
-    def fetch_follower_count(handle):
-        # print(f"fetching... {handle}")
-        profile = requests.get(
-            f"https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={handle}"
-        ).json()
-        handle_followerCount_followingCount.append(
-            (handle, profile["followersCount"], profile["followsCount"])
+    return profile
+
+
+def save_profiles_to_csv(profiles, file_name):
+    data = [profiles[0].keys(), *[profile.values() for profile in profiles]]
+
+    with open(f"{file_name}.csv", "w") as csvfile:
+        writer = csv.DictWriter(
+            csvfile,
+            fieldnames=[
+                "handle",
+                "followedByMe",
+                "followsMe",
+                "followersCount",
+                "followsCount",
+                "postsCount",
+                "displayName",
+                "createdAt",
+                "description",
+                "associated",
+                "avatar",
+                "banner",
+                "did",
+                "indexedAt",
+                "labels",
+                "pinnedPost",
+            ],
         )
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        executor.map(fetch_follower_count, followers)
-
-    handle_followerCount_followingCount.sort(
-        reverse=(not invert), key=lambda flwr: flwr[1]
-    )
-
-    print(
-        "{: <60}".format("PROFILE LINK")
-        + "{: <12}".format("FOLLOWERS")
-        + "{: <12}".format("FOLLOWING")
-    )
-
-    for handle, followerCount, followingCount in handle_followerCount_followingCount[
-        :300
-    ]:
-        is_dubious = (not ignore_dubiousness) and (followerCount / followingCount) < 2
-        if not is_dubious:
-
-            print(
-                "{: <60}".format("https://bsky.app/profile/" + handle)
-                + "{: <12}".format(followerCount)
-                + "{: <12}".format(followingCount)
-            )
+        writer.writeheader()
+        writer.writerows(profiles)
 
 
-not_following, not_following_me = get_non_mutuals(actor)
+def fetch_all_related(handle):
+    # combine followers and follows into a single dict
+    followers = get_all_followers(handle)
+    follows = get_all_follows(handle)
 
+    profiles = dict()
 
-print("\n\n\n\nTHESE ARE YOUR TOP FOLLOWERS BY FOLLOW COUNT")
-print_sorted_list_by_follower_count(get_all_followers(actor).keys())
+    for handle in followers.keys():
+        profile = fetch_profile(handle)
+        profiles[handle] = profile
 
-print("\n\n\n\nYOU DO NOT FOLLOW THESE PEOPLE BACK")
-print_sorted_list_by_follower_count(not_following.keys())
+    for handle in follows.keys():
+        if profiles.get(handle) is None:
+            profile = fetch_profile(handle)
+            profiles[handle] = profile
 
-print("\n\n\n\nTHESE PEOPLE DO NOT FOLLOW YOU BACK")
-print_sorted_list_by_follower_count(not_following_me.keys(), ignore_dubiousness=True)
+    for handle in profiles.keys():
+        profiles[handle]["followsMe"] = handle in followers
+        profiles[handle]["followedByMe"] = handle in follows
+
+    save_profiles_to_csv(list(profiles.values()), "all_related")
