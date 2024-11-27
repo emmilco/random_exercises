@@ -141,3 +141,6 @@ def fetch_all_related(handle):
         profiles[handle]["followedByMe"] = handle in follows
 
     save_profiles_to_csv(list(profiles.values()), "all_related")
+
+
+fetch_all_related(actor)
