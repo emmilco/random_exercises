@@ -121,12 +121,12 @@ def save_profiles_to_csv(profiles, file_name):
 
 
 def fetch_all_related(handle):
-    # combine followers and follows into a single dict
     followers = get_all_followers(handle)
     follows = get_all_follows(handle)
 
     profiles = dict()
 
+    # TODO: multithreading would make this faster
     for handle in followers.keys():
         profile = fetch_profile(handle)
         profiles[handle] = profile
